@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: on-failure
+    ports:
+      - "8082:8082"
+    depends_on:
+      - postgres
+      - redis
+      - nats-streaming
+    links:
+      - postgres
+      - redis
+      - "nats-streaming:nats"
+
+  nats-streaming:
+    image: nats-streaming:latest
+    container_name: nats
+    ports:
+      - 4222:4222
+      - 6222:6222
+      - 8222:8222
+    restart: always
+    command: --store file --dir /data/msg -c /data/nats-server.conf
+    volumes:
+      - ./nats-server.conf:/data/nats-server.conf
+
+  redis:
+    image: redis:6.2-alpine
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    env_file:
+      - config/redis.env
+    command: redis-server --save 20 1 --loglevel warning
+    volumes:
+      - redis:/data
+
+  postgres:
+    container_name: postgres
+    image: postgres:latest
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    env_file:
+      - config/pg.env
+    environment:
+      PGDATA: /data/postgres
+    volumes:
+      - postgres:/data/postgres
+
+    # clickhouse
+
+volumes:
+  postgres:
+  redis:
+    driver: local

@@ -1,3 +1,6 @@
 bin
 
 config/config.yaml
+config/pg.env
+config/redis.env
+
