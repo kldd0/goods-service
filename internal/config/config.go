@@ -8,17 +8,18 @@ import (
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
-/*
-type Service struct {
-	config Config
-}
-*/
-
 type Config struct {
-	Env        string `yaml:"env" env-default:"local"`
-	DSN        string `yaml:"dsn"`
-	NATSAddr   string `yaml:"nats_addr" env-default:"4222"`
+	Env      string `yaml:"env" env-default:"local"`
+	DBUri    string `yaml:"db_uri" env-default:""`
+	NATSAddr string `yaml:"nats_addr" env-default:"4222"`
+
+	Redis      `yaml:"redis"`
 	HTTPServer `yaml:"http_server"`
+}
+
+type Redis struct {
+	Uri      string `yaml:"uri"`
+	Password string `yaml:"pass"`
 }
 
 type HTTPServer struct {
@@ -62,4 +63,12 @@ func fetchConfigPath() string {
 	}
 
 	return p
+}
+
+func (c Config) RedisUri() string {
+	return c.Redis.Uri
+}
+
+func (c Config) RedisPass() string {
+	return c.Redis.Password
 }
