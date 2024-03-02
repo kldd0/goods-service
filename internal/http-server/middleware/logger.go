@@ -1,19 +1,26 @@
 package logger
 
 import (
-	"log"
 	"net/http"
 	"time"
+
+	"log/slog"
 )
 
-func New(log *log.Logger) func(next http.Handler) http.Handler {
+func New(log *slog.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
 			startTime := time.Now()
 
 			next.ServeHTTP(w, r)
 
-			log.Printf("%s - %s (%s) duration=%s", r.Method, r.URL.Path, r.RemoteAddr, time.Since(startTime).String())
+			log.Info(
+				"mw info",
+				slog.Any("method", r.Method),
+				slog.Any("url path", r.URL.Path),
+				slog.Any("remote addr", r.RemoteAddr),
+				slog.Any("duration", time.Since(startTime).String()),
+			)
 		}
 
 		return http.HandlerFunc(fn)

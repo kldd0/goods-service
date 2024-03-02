@@ -16,9 +16,12 @@ import (
 	"github.com/go-chi/chi/middleware"
 	"github.com/kldd0/goods-service/internal/clients/redis"
 	"github.com/kldd0/goods-service/internal/config"
+	"github.com/kldd0/goods-service/internal/http-server/handlers/good/delete"
 	"github.com/kldd0/goods-service/internal/http-server/handlers/good/get"
+	"github.com/kldd0/goods-service/internal/http-server/handlers/good/page"
 	"github.com/kldd0/goods-service/internal/http-server/handlers/good/patch"
 	"github.com/kldd0/goods-service/internal/http-server/handlers/good/post"
+	mw "github.com/kldd0/goods-service/internal/http-server/middleware"
 	"github.com/kldd0/goods-service/internal/logger"
 	"github.com/kldd0/goods-service/internal/storage/postgres"
 	"github.com/nats-io/nats.go"
@@ -83,7 +86,7 @@ func main() {
 
 	router.Use(middleware.RequestID)
 	router.Use(middleware.Logger)
-	// router.Use(mwLogger.New(log))
+	router.Use(mw.New(log))
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 
@@ -98,13 +101,14 @@ func main() {
 	})
 
 	router.Route("/good", func(r chi.Router) {
-		r.Get("/{id}", get.New(log, db, cache))
+		r.Get("/{id}/{projectId}", get.New(log, db, cache))
 
 		r.Post("/create", post.New(log, db))
 		r.Patch("/update", patch.New(log, db, cache))
+		r.Delete("/remove", delete.New(log, db, cache))
 	})
 
-	// router.Get("/goods/list")
+	router.Get("/goods/list", page.New(log, db, cache))
 
 	log.Info("starting http server", slog.String("address", config.HTTPServer.Address))
 

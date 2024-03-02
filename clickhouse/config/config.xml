@@ -1,0 +1,21 @@
+<yandex>
+    <logger>
+        <level>information</level>
+        <output_format>json</output_format>
+        <log_queries>1</log_queries>
+        <log_query_settings>1</log_query_settings>
+        <log_query_threads>1</log_query_threads>
+        <log_size_limit_bytes>100000000</log_size_limit_bytes>
+        <log_rotate_interval>1</log_rotate_interval>
+        <log_rotate_age_limit_days>1</log_rotate_age_limit_days>
+        <log_rotate_count_limit>1</log_rotate_count_limit>
+
+        <format_schema_path>/var/lib/clickhouse/format_schemas</format_schema_path>
+
+        <path>/var/lib/clickhouse/tmp</path>
+        <user_files_path>/var/lib/clickhouse/user_files</user_files_path>
+
+        <log>/var/log/clickhouse-server/logger.log</log>
+        <errorlog>/var/log/clickhouse-server/logger.errorlog</errorlog>
+    </logger>
+</yandex>

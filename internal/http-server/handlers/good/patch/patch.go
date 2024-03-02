@@ -20,18 +20,18 @@ import (
 	"github.com/kldd0/goods-service/internal/storage"
 )
 
-type GoodPatched struct {
-	ID          int       `json:"id"`
-	ProjectId   int       `json:"project_id"`
+type goodPatched struct {
+	ID          int       `json:"id" validate:"required"`
+	ProjectId   int       `json:"project_id" validate:"required"`
 	Name        string    `json:"name" validate:"required"`
 	Description string    `json:"description" validate:"required"`
 	Priority    *int      `json:"priority"`
-	Removed     bool      `json:"removed" validate:"required"`
+	Removed     bool      `json:"removed"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
 type Request struct {
-	Payload GoodPatched `json:"Payload"`
+	Payload goodPatched `json:"Payload"`
 }
 
 type goodPatcher interface {
@@ -114,17 +114,17 @@ func New(log *slog.Logger, db goodPatcher, cache cacheInvalidator) http.HandlerF
 
 		if err != nil && !errors.Is(err, storage.ErrGettingInsertedRows) {
 			log.Error("failed to patch good", logger.Err(err))
-			http_serv.RespondWithErr(err, w, r, "failed to add good", http.StatusInternalServerError)
+			http_serv.RespondWithErr(err, w, r, "failed to patch good", http.StatusInternalServerError)
 			return
 		}
-
-		log.Info("good added", slog.Int64("id", int64(good.ID)))
 
 		// invalidate cache
 		err = cache.Delete(r.Context(), fmt.Sprintf("%s$%s", goodId, projectId))
 		if err != nil {
 			log.Error("failed to delete good from cache", logger.Err(err))
 		}
+
+		log.Info("good patched", slog.Int64("id", int64(good.ID)))
 
 		render.JSON(w, r, good)
 	}

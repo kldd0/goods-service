@@ -25,7 +25,7 @@ services:
       - 6222:6222
       - 8222:8222
     restart: always
-    command: --store file --dir /data/msg -c /data/nats-server.conf
+    command: "-p 4222 -p 6222 -p 8222 -m 8224 --store file --dir /data/msg"
     volumes:
       - ./nats-server.conf:/data/nats-server.conf
 
@@ -54,9 +54,30 @@ services:
     volumes:
       - postgres:/data/postgres
 
-    # clickhouse
+  clickhouse-server:
+    image: yandex/clickhouse-server
+    container_name: clickhouse-server
+    restart: unless-stopped
+    ports:
+      - 8123:8123
+      - 9000:9000
+    environment:
+      - NATS_ENGINE=1
+      - NATS_CONNECT=nats:4222
+    command: ["clickhouse-server", "--config-file=/etc/clickhouse-server/config.xml"]
+    volumes:
+      - ./clickhouse_config.xml:/etc/clickhouse-server/config.xml
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+
+networks:
+  clickhouse-network:
+    driver: bridge
 
 volumes:
+  clickhouse-server:
+  clickhouse_data:
+  clickhouse_logs:
   postgres:
   redis:
     driver: local

@@ -8,9 +8,11 @@ import (
 )
 
 type Storage interface {
-	GetGood(ctx context.Context, goodId string) (models.Good, error)
+	GetGood(ctx context.Context, goodId string, projectId string) (models.Good, error)
 	SaveGood(ctx context.Context, good models.Good) (models.Good, error)
 	PatchGood(ctx context.Context, patchedGood models.Good) (models.Good, error)
+	DeleteGood(ctx context.Context, goodId string, projectId string) error
+	ListGoodsWithPagination(ctx context.Context, offset, limit string) ([]models.Good, error)
 }
 
 var (

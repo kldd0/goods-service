@@ -16,12 +16,18 @@ func (c *Client) GetGood(ctx context.Context, key string) (models.Good, error) {
 	res := c.rdb.Get(ctx, key)
 	if errors.Is(res.Err(), redis.Nil) {
 		// this value is not in the cache
-		return models.Good{}, nil
+		return models.Good{}, ErrKeyNotFound
+	}
+
+	var data []byte
+	if err := res.Scan(&data); err != nil {
+		return models.Good{}, fmt.Errorf("%s: value scanning error: %w", op, err)
 	}
 
 	var good models.Good
-	if err := res.Scan(&good); err != nil {
-		return models.Good{}, fmt.Errorf("%s: value scanning error: %w", op, err)
+	err := json.Unmarshal(data, &good)
+	if err != nil {
+		return models.Good{}, fmt.Errorf("%s: failed unmarshalling to struct: %w", op, err)
 	}
 
 	return good, nil

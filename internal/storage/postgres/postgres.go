@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -38,43 +37,69 @@ func New(dbUri string) (*Storage, error) {
 	}, nil
 }
 
-func (s *Storage) GetGood(ctx context.Context, goodId string) (models.Good, error) {
+func (s *Storage) GetGood(ctx context.Context, goodId string, projectId string) (models.Good, error) {
 	const op = "storage.postgres.GetGood"
 
-	q := `SELECT * FROM goods WHERE id=$1`
+	q := `SELECT * FROM goods WHERE id=$1 AND project_id=$2;`
 
 	stmt, err := s.db.PrepareContext(ctx, q)
 	if err != nil {
 		return models.Good{}, fmt.Errorf("%s: prepare statement: %w", op, err)
 	}
 
-	var data []byte
-	err = stmt.QueryRowContext(ctx, goodId).Scan(&data)
+	var resultGood models.Good
+
+	err = stmt.QueryRowContext(ctx, goodId, projectId).Scan(
+		&resultGood.ID,
+		&resultGood.ProjectId,
+		&resultGood.Name,
+		&resultGood.Description,
+		&resultGood.Priority,
+		&resultGood.Removed,
+		&resultGood.CreatedAt,
+	)
+
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.Good{}, storage.ErrEntryDoesntExist
 		}
 
-		return models.Good{}, fmt.Errorf("%s: execute statement: %w", op, err)
+		return models.Good{}, fmt.Errorf("%s: saving entry: %w", op, err)
 	}
 
-	var good models.Good
-	err = json.Unmarshal(data, &good)
-	if err != nil {
-		return models.Good{}, fmt.Errorf("%s: unmarshalling data: %w", op, err)
-	}
-
-	return good, nil
+	return resultGood, nil
 }
 
 func (s *Storage) SaveGood(ctx context.Context, good models.Good) (models.Good, error) {
 	const op = "storage.postgres.SaveGood"
 
-	q := `INSERT INTO goods (project_id, name, description, priority, removed, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6) RETURNING
-            id, project_id, name, description, priority, removed, created_at`
+	// check if entry exists
+	q := `SELECT id FROM goods WHERE id=$1 FOR SHARE;`
 
 	stmt, err := s.db.PrepareContext(ctx, q)
+	if err != nil {
+		return models.Good{}, fmt.Errorf("%s: prepare statement: %w", op, err)
+	}
+
+	res, err := stmt.ExecContext(ctx, good.ID)
+	if err != nil {
+		return models.Good{}, fmt.Errorf("%s: execute statement: %w", op, err)
+	}
+
+	c, err := res.RowsAffected()
+	if err != nil {
+		if c != 0 {
+			return models.Good{}, storage.ErrEntryAlreadyExists
+		}
+
+		return models.Good{}, fmt.Errorf("%s: get info about affected rows: %w", op, err)
+	}
+
+	q = `INSERT INTO goods (project_id, name, description, priority, removed, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6) RETURNING
+            id, project_id, name, description, priority, removed, created_at;`
+
+	stmt, err = s.db.PrepareContext(ctx, q)
 	if err != nil {
 		return models.Good{}, fmt.Errorf("%s: prepare statement: %w", op, err)
 	}
@@ -121,14 +146,14 @@ func (s *Storage) PatchGood(ctx context.Context, patchedGood models.Good) (model
 	}()
 
 	// check if entry exists
-	q := `SELECT id FROM goods WHERE id=$1 FOR SHARE`
+	q := `SELECT id FROM goods WHERE id=$1 AND project_id=$2 FOR SHARE;`
 
 	stmt, err := tx.PrepareContext(ctx, q)
 	if err != nil {
 		return models.Good{}, fmt.Errorf("%s: prepare statement: %w", op, err)
 	}
 
-	res, err := stmt.ExecContext(ctx, patchedGood.ID)
+	res, err := stmt.ExecContext(ctx, patchedGood.ID, patchedGood.ProjectId)
 	if err != nil {
 		return models.Good{}, fmt.Errorf("%s: execute statement: %w", op, err)
 	}
@@ -146,8 +171,8 @@ func (s *Storage) PatchGood(ctx context.Context, patchedGood models.Good) (model
 		return models.Good{}, storage.ErrEntryDoesntExist
 	}
 
-	q = `UPDATE goods SET name=$1, description=$2, priority=$3, removed=$4 WHERE id=$5 RETURNING
-            id, project_id, name, description, priority, removed, created_at`
+	q = `UPDATE goods SET name=$1, description=$2, priority=$3, removed=$4 WHERE id=$5 AND project_id=$6 RETURNING
+            id, project_id, name, description, priority, removed, created_at;`
 
 	stmt, err = tx.PrepareContext(ctx, q)
 	if err != nil {
@@ -163,6 +188,7 @@ func (s *Storage) PatchGood(ctx context.Context, patchedGood models.Good) (model
 		patchedGood.Priority,
 		patchedGood.Removed,
 		patchedGood.ID,
+		patchedGood.ProjectId,
 	).Scan(
 		&resultGood.ID,
 		&resultGood.ProjectId,
@@ -187,6 +213,71 @@ func (s *Storage) PatchGood(ctx context.Context, patchedGood models.Good) (model
 	}
 
 	return resultGood, nil
+}
+
+func (s *Storage) ListGoodsWithPagination(ctx context.Context, offset, limit string) ([]models.Good, error) {
+	const op = "storage.postgres.ListGoodsWithPagination"
+
+	q := `SELECT id, project_id, name, description, priority, removed, created_at FROM goods
+            ORDER BY id OFFSET $1 LIMIT $2;`
+
+	stmt, err := s.db.PrepareContext(ctx, q)
+	if err != nil {
+		return []models.Good{}, fmt.Errorf("%s: prepare statement: %w", op, err)
+	}
+
+	rows, err := stmt.QueryContext(ctx, offset, limit)
+	if err != nil {
+		return []models.Good{}, fmt.Errorf("%s: execute statement: %w", op, err)
+	}
+
+	var goods []models.Good
+
+	for rows.Next() {
+		var good models.Good
+
+		if err := rows.Scan(
+			&good.ID,
+			&good.ProjectId,
+			&good.Name,
+			&good.Description,
+			&good.Priority,
+			&good.Removed,
+			&good.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("%s: scanning bytes of row: %w", op, err)
+		}
+
+		goods = append(goods, good)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("%s: error iterating over rows: %w", op, err)
+	}
+
+	return goods, nil
+}
+
+func (s *Storage) DeleteGood(ctx context.Context, goodId string, projectId string) error {
+	const op = "storage.postgres.DeleteGood"
+
+	q := `DELETE FROM goods WHERE id=$1 AND project_id=$2`
+
+	stmt, err := s.db.PrepareContext(ctx, q)
+	if err != nil {
+		return fmt.Errorf("%s: prepare statement: %w", op, err)
+	}
+
+	_, err = stmt.ExecContext(ctx, goodId, projectId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return storage.ErrEntryDoesntExist
+		}
+
+		return fmt.Errorf("%s: execute statement: %w", op, err)
+	}
+
+	return nil
 }
 
 func (s *Storage) Close() error {
