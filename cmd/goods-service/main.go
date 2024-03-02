@@ -17,6 +17,8 @@ import (
 	"github.com/kldd0/goods-service/internal/clients/redis"
 	"github.com/kldd0/goods-service/internal/config"
 	"github.com/kldd0/goods-service/internal/http-server/handlers/good/get"
+	"github.com/kldd0/goods-service/internal/http-server/handlers/good/patch"
+	"github.com/kldd0/goods-service/internal/http-server/handlers/good/post"
 	"github.com/kldd0/goods-service/internal/logger"
 	"github.com/kldd0/goods-service/internal/storage/postgres"
 	"github.com/nats-io/nats.go"
@@ -42,10 +44,6 @@ func main() {
 		log.Error("failed connecting to database", logger.Err(err))
 	}
 	defer db.Close()
-
-	if err := db.InitDB(ctx); err != nil {
-		log.Error("failed initializing storage", logger.Err(err))
-	}
 
 	// init nats connection
 	nc, err := nats.Connect(fmt.Sprintf("nats://%s", config.NATSAddr))
@@ -84,7 +82,7 @@ func main() {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
-	// router.Use(middleware.Logger
+	router.Use(middleware.Logger)
 	// router.Use(mwLogger.New(log))
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
@@ -101,7 +99,12 @@ func main() {
 
 	router.Route("/good", func(r chi.Router) {
 		r.Get("/{id}", get.New(log, db, cache))
+
+		r.Post("/create", post.New(log, db))
+		r.Patch("/update", patch.New(log, db, cache))
 	})
+
+	// router.Get("/goods/list")
 
 	log.Info("starting http server", slog.String("address", config.HTTPServer.Address))
 

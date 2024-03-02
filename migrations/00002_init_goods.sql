@@ -17,7 +17,7 @@ CREATE UNIQUE INDEX goods_id_name_idx on goods (id, project_id, name);
 
 
 -- a trigger to automatically set the default value for the priority column
-CREATE OR REPLACE FUNCTION set_default_priority()
+CREATE OR REPLACE FUNCTION priority()
 RETURNS TRIGGER AS $$
 BEGIN
     IF NEW.priority IS NULL THEN
@@ -28,9 +28,9 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER set_default_priority
-BEFORE INSERT ON goods
-FOR EACH ROW
-EXECUTE FUNCTION set_default_priority();
+    BEFORE INSERT ON goods
+    FOR EACH ROW
+    EXECUTE FUNCTION priority();
 
 -- +goose StatementEnd
 
@@ -39,6 +39,8 @@ EXECUTE FUNCTION set_default_priority();
 
 DROP TRIGGER IF EXISTS set_default_priority;
 
-DROP TABLE goods;
+DROP FUNCTION IF EXISTS priority;
+
+DROP TABLE IF EXISTS goods;
 
 -- +goose StatementEnd

@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -10,7 +11,7 @@ import (
 
 var (
 	timeout  = time.Second * 15
-	entryTTL = time.Minute * 20
+	entryTTL = time.Minute
 
 	ErrKeyNotFound = errors.New("key not found")
 )
@@ -36,15 +37,13 @@ func New(ctx context.Context, config configGetter) (*Client, error) {
 	return &Client{rdb: rdb}, rdb.Ping(ctx).Err()
 }
 
-/*
 func (c *Client) Delete(ctx context.Context, key string) error {
 	res := c.rdb.Del(ctx, key)
 
 	err := res.Err()
 	if err != nil {
-		return err
+		return fmt.Errorf("set report error: %w", err)
 	}
 
 	return nil
 }
-*/

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 
 	"log/slog"
 
@@ -19,7 +20,7 @@ import (
 )
 
 type Request struct {
-	Payload models.Good
+	Payload models.Good `json:"Payload"`
 }
 
 type goodSaver interface {
@@ -35,9 +36,19 @@ func New(log *slog.Logger, db goodSaver) http.HandlerFunc {
 			slog.String("request_id", middleware.GetReqID(r.Context())),
 		)
 
+		projectId := r.URL.Query().Get("projectId")
+
+		// check if string id is number
+		projectIdNum, err := strconv.Atoi(projectId)
+		if projectId == "" || err != nil {
+			log.Info("bad request", slog.Any("projectId", projectId))
+			RespondWithErr(err, w, r, "bad request", http.StatusBadRequest)
+			return
+		}
+
 		var req Request
 
-		err := render.DecodeJSON(r.Body, &req)
+		err = render.DecodeJSON(r.Body, &req)
 		if errors.Is(err, io.EOF) {
 			// body of request is empty
 			log.Error("request body is empty")
@@ -51,9 +62,10 @@ func New(log *slog.Logger, db goodSaver) http.HandlerFunc {
 			return
 		}
 
+		req.Payload.ProjectId = projectIdNum
 		log.Info("request body decoded", slog.Any("request", req))
 
-		if err := validator.New().Struct(req); err != nil {
+		if err := validator.New().Struct(req.Payload); err != nil {
 			validateErr := err.(validator.ValidationErrors)
 			log.Error("invalid request", logger.Err(err))
 			render.JSON(w, r, http_server.ValidationError(validateErr))
@@ -67,7 +79,11 @@ func New(log *slog.Logger, db goodSaver) http.HandlerFunc {
 			return
 		}
 
-		if err != nil {
+		if errors.Is(err, storage.ErrGettingInsertedRows) {
+			log.Info("failed to get inserted row", logger.Err(err))
+		}
+
+		if err != nil && !errors.Is(err, storage.ErrGettingInsertedRows) {
 			log.Error("failed to add good", logger.Err(err))
 			RespondWithErr(err, w, r, "failed to add good", http.StatusInternalServerError)
 			return
